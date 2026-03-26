@@ -375,7 +375,7 @@ interval:
             }
           };
 
-          auto cmd = esphome::modbus_controller::ModbusCommandItem::create_read_command(
+          static auto cmd = esphome::modbus_controller::ModbusCommandItem::create_read_command(
             controller,
             ModbusRegisterType::HOLDING,
             start_addr,
@@ -435,6 +435,8 @@ interval:
 
               uint32_t m_exported_total_raw = get_u32(36); // 40226-40227
               uint32_t m_imported_total_raw = get_u32(44); // 40234-40235
+
+              if (m_exported_total_raw == 0 || m_imported_total_raw == 0) return; // Skip invalid reading
               
               // ── Calculations ────────────────────────────────
           #if 0              
@@ -480,7 +482,7 @@ interval:
             }
           );
 
-          controller->queue_command(cmd);
+          cmd.send(); // https://github.com/esphome/esphome/pull/12614
           ESP_LOGD("timing", "Solaredge METER command queued...");
       - lambda: |-
           auto *controller = id(solaredge_controller);
@@ -493,7 +495,7 @@ interval:
           }
           pending = true;
 
-          auto cmd = esphome::modbus_controller::ModbusCommandItem::create_read_command(
+          static auto cmd = esphome::modbus_controller::ModbusCommandItem::create_read_command(
             controller,
             ModbusRegisterType::HOLDING,
             start_addr,
@@ -581,6 +583,8 @@ interval:
               uint32_t energy_raw         = (static_cast<uint32_t>(get_u16(22)) << 16) |
                                             get_u16(23);  // 40093-40094 acc32
 
+              if (energy_raw == 0) return; // Skip invalid readings
+
               uint16_t I_AC_VoltageAN_raw = get_u16(8);
               uint16_t I_AC_VoltageBN_raw = get_u16(9);
               uint16_t I_AC_VoltageCN_raw = get_u16(10);
@@ -651,7 +655,7 @@ interval:
             }
           );
 
-          controller->queue_command(cmd);
+          cmd.send(); // https://github.com/esphome/esphome/pull/12614
           ESP_LOGD("timing", "Solaredge command queued...");
 
 

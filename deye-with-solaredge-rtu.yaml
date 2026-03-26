@@ -1,12 +1,13 @@
 # https://github.com/kosl/esphome-fake-eastron-SDM630-with-CTs
 # This is a bridge for Deye Inv-Meter2 addon, where Eastron SDM630 RS485/RTU
 # is emulated from Solaredge SE17K inverter using Modbus/RTU client.
-# In addition it provides Deye sensors and controls.
+# In addition it provides Modbus TCP to RTU bridge for SolarMan integration and
+# selected sensors from Solaredge and its utility meter.
 
 esphome:
-  name: energy-meter
-  friendly_name: deye
-  min_version: 2026.1.0 
+  name: deye-bridge
+  friendly_name: Deye & Solaredge
+  min_version: 2026.3.1
   devices: # https://esphome.io/components/esphome/#sub-devices
     - id: device_solaredge
       name: "Solaredge Inverter"
@@ -41,19 +42,28 @@ logger:
 
 api: # Enable Home Assistant API
 
+web_server:
+  port: 80
+
 ota:
   - platform: esphome
 
 wifi:
   networks:
     - ssid: !secret wifi_eteradxa_ssid
+      password: !secret wifi_eteradxa_password
+      bssid: '5a:cd:0c:21:8e:d9'
+      hidden: True
+      priority: 5
+    - ssid: !secret wifi_etera_ssid
+      password: !secret wifi_password
+    - ssid: !secret wifi_mansarda_ssid
       password: !secret wifi_password
     - ssid: !secret wifi_garaza_ssid
       password: !secret wifi_password
-    - ssid: !secret wifi_ssid
-      password: !secret wifi_password
   output_power: 8.5dB
-  power_save_mode: none  # Better reliability over power saving  
+  power_save_mode: none  # Better reliability over power saving
+  # domain: .local.wgn.si
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
@@ -63,9 +73,9 @@ wifi:
 captive_portal:
 
 external_components:
-  # https://github.com/esphome/esphome/issues/12183$0
-  - source: github://pr#11969
-    components: [modbus, modbus_controller, modbus_server]
+  # https://github.com/esphome/esphome/issues/12183
+  - source: github://pr#12614 #11969
+    components: [uart, modbus, modbus_controller, modbus_server]
     refresh: 1h
   - source:
       type: git
@@ -80,12 +90,14 @@ uart:
     tx_pin: GPIO5
     baud_rate: 9600
     rx_buffer_size: 256
-    debug:
-      direction: BOTH
+    #debug:
+    #  direction: BOTH
   # GPIO3 - RX to RXD of bottom RS485 module
   # GPIO1 - TX to TXD of bottom RS485 module
   - id: uart_modbus_bridge
-    rx_pin: GPIO3
+    rx_pin: 
+      number: GPIO3
+      ignore_strapping_warning: true
     tx_pin: GPIO1
     baud_rate: 115200
     rx_buffer_size: 512 # minimum 256 recommended; increase for long RTU responses
@@ -166,6 +178,19 @@ sensor:
     accuracy_decimals: 0
     unit_of_measurement: count
     update_interval: never
+
+text_sensor:
+  - platform: wifi_info
+    ssid:
+      name: "Connected SSID"
+      entity_category: diagnostic  
+    bssid:
+      name: Device Connected BSSID
+    scan_results:
+      name: Device Latest Scan Results      
+#    power_save_mode:
+#     name: Device Wifi Power Save Mode
+    
 
 # Modbus bridge configuration: TCP server <-> UART RTU translator
 modbus_bridge:
