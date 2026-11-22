@@ -1,26 +1,31 @@
 
-## ESPHome Fake Eastron SDM630 Modbus v2 with CTs
+## ESPHome Fake Eastron SDM630 Modbus for Deye inverter Meter2 input
 [![GitHub Activity][commits-shield]][commits]
 [![Last Commit][last-commit-shield]][commits]
 [![Platform][platform-shield]](https://github.com/esphome)
 
-This project [kosl/esphome-fake-eastron-SDM630-with-CTs](https://github.com/kosl/esphome-fake-eastron-SDM630-with-CTs) allows you to provide live data from current transformers (CTs) to a solar inverter that expects an [Eastron SDM630](https://www.eastroneurope.com/products/view/sdm630modbus).
 
-Such example is Deye inverter
+This project [kosl/esphome-deye-meter2-solaredge](https://github.com/kosl/esphome-deye-meter2-solaredge) allows you to provide live data in one of the following ways:
+1) From Solaredge inverter using Modbus/RTU client connection to Deye Meter-2 as Modbus/RTU server.
+2) From Solaredge inverter using Modbus/TCP client connection to Deye Meter-2 as Modbus/RTU server.
+3) From current transformers (CTs) measuring meter-2 currents to Deye Meter-2 as Modbus/RTU server. 
+
+In addition this project provides [Modbus/TCP server to Modbus/RTU client bridge](https://github.com/rosenrot00/esphome_modbus_bridge) for monitoring Deye SUN-12K-SG04LP3 (or similar) inverter with without the need of use of Deye WiFi dongle for [Home Assistant Deye HA-Solarman integration](https://github.com/davidrapan/ha-solarman).
+
+We will use ESP32-C3 or ESP32-C3 SuperMini/Zero board with addition of few TTL to Modbus/TCP boards for inverter communication. 
+
+
+### Theory of operation
+Deye solar inverter expects an [Eastron SDM630](https://www.eastroneurope.com/products/view/sdm630modbus) for a grid-tied Meter2 to take into accound additional production as shown in the following figure.
 
 ![Grid-tie inverter](images/deye-with-grid-tie-inverter.png)
 
-We will use ESP32-C3 SuperMini board with addition of "external" CTs and few resistors as shown below 
-
-![CTsr](images/current-transformers.png)
-
-Since this will be installed in SUN-12K-SG04LP3 inverter we will also 
-add local [Modbus dongle](https://github.com/rosenrot00/esphome_modbus_bridge)  
-for use in [Solarman](https://github.com/davidrapan/ha-solarman) integration.
-
 ## How is this working?
 
-The project provides an ESPhome component acting as a server that can be polled by a master (e.g. a solar inverter) via Modbus RTU. It behaves as much as possible like the Eastron SDM630 while fetching the actual data from the CTs.
+The project provides an ESPhome component acting as a server that can be polled by a master (e.g. a solar inverter) via Modbus RTU. 
+It behaves as much as possible like the Eastron SDM630 while fetching the actual data from the CTs or from Modbus/TCP/RTU.
+
+Note that Modbus bridge for Solarman allows to coexist with Modbus client. Meaning that at the same time it is possible to query data from Solaredge and from Deye provided they are at different Modbus/RTU address and at the same baud rate. This saves additional TTL->Modbus/RTU interface meaning that ESP32-C3 can be used with two TTL->Modbus/RTU boards connecting Solaredge and Deye on one and act as a Modbus server for Meter2 reads. Such configuration is not shown in this project.
 
 ### How exactly?
 
@@ -50,9 +55,22 @@ Since the ESP32-C3 is very cheap this simple ESPhome project bridges manufacture
 For implementation the cheapest ESP32-C3 Super Mini module (€2.5-€4), some resistors, and RS485 to TTL module(s) are required.
 Compete cost is under €10 excluding costs of CTs that can be various (cheap, split-core, different ratios, accuracy,...)
 
-![Fake Eastron](images/fake-eastron-and-modbus-bridge.png)
+### Option 1.) with 3 Modbus/RTU TTL interfaces
+When more virtual Modbus devices are needed then ESP32-S3 zero is recommended that has 3 UARTS and can host Solaredge Modbus/TCP client fetching directly from the inverter or Modbus/RTU for direct Solaredge coupling. In the following photo all 3 RS485 modules are stacked on on top of each other with voltage converter and ESP32S3 zero where everything packs inside single 3D printed box.
+![Board3](images/esp32s3-3xRS485.jpeg)
 
-### Burden resistor
+Final Deye SUN 12K-SG04LP3 installation is shown in the photo below. Antenna from ESP32S3 zero is 31 mm wire extending through box and inverter.
+![Board3](images/deye-dongle.jfif)
+For long signal trains it is advisable to add ferite ring around to prevent EMI events.
+
+### Option 2.) with Modbus/TCP client to Solaredge and 2 Modbus/RTU interfaces for Deye
+Note that some RS485 modules have TXD and RXD marked reversed (`tx_pin` is connected to TXD) as shown in the folowing photo.
+![Board](images/board-esp32s3-dual-ttl-modbus.jpg)
+
+### Option 3.) with "external" CTs and few resistors as shown below 
+![Fake Eastron](images/fake-eastron-and-modbus-bridge.png)
+#### Burden resistor
+![CTsr](images/current-transformers.png)
 
 ESP32-C3 at 6dB attenuation can measure up to 1350 mV. Middle voltage is 675 mV.
 If having CT with ratio 1:3000 that at 35A primary one gets 0.01167 A at secondary. 
@@ -62,6 +80,10 @@ Therefore we select R = 47 Ohm that is somewhat compatible with UTP cable.
 For getting middle voltage 0.675 V from 3.3 V divisor by selecting lower R6 at 330Ω 
 the upper R5 is (3.3-0.675)/(0.675/330)=1283Ω and therefore we select 1K2 resistor. 
 
+All 4 modules (ESP32-S3, stepdown regulator below, and RS485 module stacked) 
+with resistors for the CTs bridge shown below.
+![Board](images/board-esp32c3-ttl-modbus.jpg)
+
 ## Installation
 
 1. Connect ESP32 dev board to RS485 module.
@@ -69,20 +91,6 @@ the upper R5 is (3.3-0.675)/(0.675/330)=1283Ω and therefore we select 1K2 resi
 3. Build and flash the firmware based on the [sample ESPhome config](./fake-eastron.yaml).
 4. Calibrate ADCs to correspond Deye CTs readings. For this CTs should be placed in serial with Deye CTs and both should show the same currents on all phases.
 5. Enable meter-reading in Deye as explained in the following examples.
-
-All 4 modules (ESP32-S3, stepdown regulator below, and RS485 module stacked) 
-with resistors for the CTs bridge shown below.
-![Board](images/board-esp32c3-ttl-modbus.jpg)
-Note that some RS485 modules have TXD and RXD marked reversed (`tx_pin` is connected to TXD) as shown in the folowing photo.
-![Board](images/board-esp32s3-dual-ttl-modbus.jpg)
-
-When more virtual Modbus devices are needed then ESP32-S3 zero is recommended that has 3 UARTS and can host Solaredge Modbus/TCP client fetching directly from the inverter or Modbus/RTU for direct Solaredge coupling. In the following photo all 3 RS485 modules are stacked on on top of each other with voltage converter and ESP32S3 zero where everything packs inside single 3D printed box.
-![Board3](images/esp32s3-3xRS485.jpeg)
-
-Final Deye SUN 12K-SG04LP3 installation is shown in the photo below. Antenna from ESP32S3 zero is 31 mm wire extending through box and inverter.
-![Board3](images/deye-dongle.jfif)
-For long signal trains it is advisable to add ferite ring around to prevent EMI events.
-
 
 ### Modbus device address and registers
 
@@ -112,7 +120,7 @@ When providing Ex_MeterCT reading from other sources (e.g. Solaredge Inverter) v
 
 The communication speed for reading Solaredge can be low (19200 baud) due to asynchronous nature of Esphome Modbus operation and hardware UART support. MOr problems on the high update rate can cause many sensors published. For that reason the number of published sensors from the Solaredge is kept low where only necessary sensors are updated through shared global variables. Since "EX_MeterCT" is only of informational nature in the "Grid Tie Meter2" loop update it can be updated from Solaredge sparsly while still providing high server rates at address 0x01. 
 
-### Module configurations
+## Module configurations
 
 There are several examples listed below that are being tested and implmented until final solution with ESP32-S3 zero and 3xRS485 was finalized.
 
